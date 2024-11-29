@@ -27,7 +27,7 @@ reference_speaker = 23          #this is the index of the central speaker
 
 # signal parameters             # change this to speech spectrum white noise
 low_cutoff = 80
-high_cutoff = 8000
+high_cutoff = 16000
 rec_repeat = 5  # how often to repeat measurement for averaging
 # signal for loudspeaker calibration
 signal_length = 2.0  # how long should the chirp be?
@@ -49,8 +49,7 @@ noise = slab.Sound.whitenoise(duration =2.0)
 filters = slab.Filter.band(frequency=(low_cutoff,high_cutoff), kind='bp')
 fbank = slab.Filter(filters)
 signal = fbank.apply(noise)
-signal.level = 85
-### Physical difference: headphone is about 5db louder than speaker
+signal.level = 70 ## Physical difference: headphone is about 5db louder than speaker
 signal = slab.Sound.ramp(signal, when='both', duration=ramp_duration)
 
 ### SET SIGNAL & FUNCTIONS for headphone
@@ -95,7 +94,6 @@ def play_and_record_headphones(signal,equalize=False):
 
 #filt = slab.Filter.band(frequency=60, kind='hp')        # filter out the strange line noise (or whatever that was causing the sine wave)
 reference_speaker = freefield.pick_speakers(reference_speaker)[0]
-temp_recs = []
 n_delay = freefield.get_recording_delay(play_from="RX8", rec_from="RP2")
 n_delay += 50  # make the delay a bit larger to avoid missing the sound's onset
 freefield.set_signal_and_speaker(speaker=reference_speaker, signal=signal, equalize=False)
@@ -114,8 +112,10 @@ for i in range(rec_repeat):
     temp_recs.append(rec.data)
 speaker_rec = slab.Sound(data=numpy.mean(temp_recs, axis=0))        #need to match this to the target signal
 #speaker_rec = filt.apply(speaker_rec)
+speaker_rec.channel(0).level
+speaker_rec.channel(1).level
 speaker_rec.channel(1).waveform()
-speaker_rec.channel(1).spectrum()
+speaker_rec.channel(0).spectrum()
 
 ### Match speaker recording with target signal, only for transfer function
 #speaker_filter_bank_l = slab.Filter.equalizing_filterbank(reference= signal, sound = speaker_rec.channel(0))
@@ -145,9 +145,8 @@ for i in range(rec_repeat):
 speaker_rec_tf = slab.Sound(data=numpy.mean(temp_recs, axis=0))        #need to match this to the target signal
 #speaker_rec_tf = filt.apply(speaker_rec_tf)
 #speaker_rec_tf.waveform()
+speaker_rec_tf.channel(1).level
 speaker_rec_tf.channel(1).spectrum()
-speaker_rec.channel(1).spectrum()
-signal.spectrum()
 
 
 # ---- START calibration ----#
@@ -221,12 +220,13 @@ speaker_rec_tf.channel(1).spectrum()
 
 # save equalization
 headphone_equalization = {'23': None,'47': None, '48': None}
-headphone_equalization['23'] = {"level": equalization_levels[0]+5, "filter": None}
-headphone_equalization['47'] = {"level": equalization_levels[0], "filter": headphone_filter_bank_l}
-headphone_equalization['48'] = {"level": equalization_levels[1], "filter": headphone_filter_bank_r}
+headphone_equalization['23'] = {"level": 5, "filter": speaker_filter_bank_r}     #equalization_levels[0]+5
+headphone_equalization['47'] = {"level": 5, "filter": headphone_filter_bank_l}       #equalization_levels[0]
+headphone_equalization['48'] = {"level": 5, "filter": headphone_filter_bank_r}           #equalization_levels[1]
+# the level equalization doesnt do anything since the filter took care of the loudness difference as well
 
 # write final equalization to pkl file
-calibration_path = freefield.DIR / 'data' / 'headphone_equalization.pkl'
+calibration_path = freefield.DIR / 'data' / 'headphone_equalization_2911.pkl'
 # project_path = Path.cwd() / 'data' / 'calibration'
 # equalization_path = project_path / f'calibration_dome_100k_31.10.pkl'
 with open(calibration_path, 'wb') as f:  # save the newly recorded calibration
@@ -240,21 +240,47 @@ headphone_calibration = freefield.load_equalization(calibration_path)
 headphone_speaker_list = (speaker_table[-2:, 0]).astype('int')
 speakers = freefield.pick_speakers(headphone_speaker_list)
 
-### complete test after calibrating headphone
+### HEADPHONE complete test after calibrating
 headphone_rec_full = []  # store all recordings from the dome for final spectral difference
 temp_recs = []
-final = deepcopy(signal)
-#attenuated.level += equalization_levels
 freefield.PROCESSORS.mode = 'bi_play_rec'
 # record new filtered data through calibrated headphone
 for i in range(rec_repeat):
-    rec = play_and_record_headphones(final,equalize=True)
+    time.sleep(5)
+    rec = play_and_record_headphones(signal = signal,equalize=True)
     temp_recs.append(rec.data)
 headphone_rec_full = (slab.Sound(data=numpy.mean(temp_recs, axis=0)))
-headphone_rec_full = filt.apply(headphone_rec_full)
 
-headphone_rec_full.waveform()
-headphone_rec_full.spectrum()
+headphone_rec_full.channel(0).level
+headphone_rec_full.channel(1).level
 
-speaker_rec.waveform()
-speaker_rec.spectrum()
+headphone_rec_full.channel(1).spectrum()
+
+
+###### SPEAKER complete test after calibration
+#speakers = freefield.pick_speakers(reference_speaker)
+n_delay = freefield.get_recording_delay(play_from="RX8", rec_from="RP2")
+n_delay += 50  # make the delay a bit larger to avoid missing the sound's onset
+freefield.set_signal_and_speaker(speaker=reference_speaker, signal=signal, equalize=True)
+freefield.write(tag="recbuflen", value=signal.n_samples + n_delay, processors="RP2")
+freefield.write(tag='chan_l', value=99, processors='RP2')
+freefield.write(tag='chan_r', value=99, processors='RP2')
+temp_recs = []
+speaker_rec = []
+for i in range(rec_repeat):
+    time.sleep(5)
+    freefield.play()
+    rec_l = freefield.read(tag='datal', processor='RP2', n_samples=signal.n_samples + n_delay)[n_delay:]
+    rec_r = freefield.read(tag='datar', processor='RP2', n_samples=signal.n_samples + n_delay)[n_delay:]
+    rec = slab.Binaural([rec_l, rec_r], samplerate=fs)
+    freefield.wait_to_finish_playing()
+    temp_recs.append(rec.data)
+speaker_rec_full = slab.Sound(data=numpy.mean(temp_recs, axis=0))        #need to match this to the target signal
+
+speaker_rec_full.channel(0).level
+speaker_rec_full.channel(1).level
+speaker_rec_full.channel(1).spectrum()
+
+## subjective test 29.11: the quality of the sound is almost the same on speaker and headphone (the spectrum function works)
+## filter the sound then load, calibrate the sound on the go takes too long
+## measure actual db with the audiometer (holding it like last time)
