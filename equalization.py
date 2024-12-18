@@ -49,7 +49,7 @@ noise = slab.Sound.whitenoise(duration =2.0)
 filters = slab.Filter.band(frequency=(low_cutoff,high_cutoff), kind='bp')
 fbank = slab.Filter(filters)
 signal = fbank.apply(noise)
-signal.level = 70 ## Physical difference: headphone is about 5db louder than speaker
+signal.level = 75 ## Physical difference: headphone is about 5db louder than speaker
 signal = slab.Sound.ramp(signal, when='both', duration=ramp_duration)
 
 ### SET SIGNAL & FUNCTIONS for headphone
@@ -66,7 +66,7 @@ def set_signal_headphones(signal,equalize=False, data_tags=['data_l', 'data_r'],
     for i, (speaker, ch_tag, data_tag) in enumerate(zip(speakers, chan_tags, data_tags)):
         if equalize:
             freefield.logging.info('Applying calibration.')  # apply level and frequency calibration
-            to_play = freefield.apply_equalization(signal.channel(i),speaker=speakers).data
+            to_play = freefield.apply_equalization(signal.channel(i),speaker=speaker).data
         elif not equalize:
             to_play = signal.channel(i).data
         freefield.PROCESSORS.write(tag=ch_tag, value=speaker.analog_channel, processors=speaker.analog_proc)
@@ -111,11 +111,11 @@ for i in range(rec_repeat):
     freefield.wait_to_finish_playing()
     temp_recs.append(rec.data)
 speaker_rec = slab.Sound(data=numpy.mean(temp_recs, axis=0))        #need to match this to the target signal
-#speaker_rec = filt.apply(speaker_rec)
-speaker_rec.channel(0).level
-speaker_rec.channel(1).level
+
+#speaker_rec.channel(0).level
+speaker_rec.channel(1).level        #channel 1: right
 speaker_rec.channel(1).waveform()
-speaker_rec.channel(0).spectrum()
+speaker_rec.channel(1).spectrum()
 
 ### Match speaker recording with target signal, only for transfer function
 #speaker_filter_bank_l = slab.Filter.equalizing_filterbank(reference= signal, sound = speaker_rec.channel(0))
@@ -143,8 +143,8 @@ for i in range(rec_repeat):
     freefield.wait_to_finish_playing()
     temp_recs.append(rec.data)
 speaker_rec_tf = slab.Sound(data=numpy.mean(temp_recs, axis=0))        #need to match this to the target signal
-#speaker_rec_tf = filt.apply(speaker_rec_tf)
-#speaker_rec_tf.waveform()
+
+speaker_rec_tf.channel(1).waveform()
 speaker_rec_tf.channel(1).level
 speaker_rec_tf.channel(1).spectrum()
 
@@ -155,6 +155,7 @@ speaker_rec_tf.channel(1).spectrum()
 Record the signal from each speaker in the list and return the level of each
 speaker relative to the target speaker(target speaker must be in the list)
 """
+
 freefield.PROCESSORS.mode = 'bi_play_rec'
 temp_recs = []
 for i in range(rec_repeat):
@@ -163,30 +164,24 @@ for i in range(rec_repeat):
     temp_recs.append(rec.data)
 headphone_rec = (slab.Sound(data=numpy.mean(temp_recs, axis=0)))
 
-#left_level = headphone_rec.channel(0).level
-#right_level = headphone_rec.channel(1).level
-#headphone_level_cor = left_level - right_level
-headphone_rec.waveform()
+#headphone_rec.channel(0).level
+headphone_rec.channel(1).level
+headphone_rec.channel(1).waveform()
 headphone_rec.channel(1).spectrum()
 
-### correct left_right difference, I hope Thomas will fix this so it can be gone
-#signal_level_cor = deepcopy(signal)
-#signal_level_cor = slab.Binaural(signal_level_cor)
-#signal_level_cor.channel(1).level = headphone_rec.channel(0).level + headphone_level_cor
-#temp_recs = []
-#for i in range(rec_repeat):
-    #rec = play_and_record_headphones(signal_level_cor,equalize=False)
-    #temp_recs.append(rec.data)
-#headphone_rec = (slab.Sound(data=numpy.mean(temp_recs, axis=0)))
-#headphone_rec.waveform()
-#headphone_rec.spectrum()
+####################
+right = headphone_rec.channel(1)    #same mic
+left = headphone_rec.channel(1)     #same mic
 
-headphone_filter_bank_l = slab.Filter.equalizing_filterbank(reference= speaker_rec_tf.channel(1), sound = headphone_rec.channel(0),length=1000, bandwidth=1/8, low_cutoff=80, high_cutoff=16000,
+#left_increase = deepcopy(left)
+#left_increase.level = left_increase.level+1
+
+headphone_filter_bank_l = slab.Filter.equalizing_filterbank(reference= speaker_rec_tf.channel(1), sound = left,length=1000, bandwidth=1/8, low_cutoff=80, high_cutoff=16000,
                               alpha=1.0, filt_meth='filtfilt')
-headphone_filter_bank_r = slab.Filter.equalizing_filterbank(reference= speaker_rec_tf.channel(1), sound = headphone_rec.channel(1),length=1000, bandwidth=1/8, low_cutoff=80, high_cutoff=16000,
+headphone_filter_bank_r = slab.Filter.equalizing_filterbank(reference= speaker_rec_tf.channel(1), sound = right,length=1000, bandwidth=1/8, low_cutoff=80, high_cutoff=16000,
                               alpha=1.0, filt_meth='filtfilt')
 # thresholding
-equalization_levels = speaker_rec.level - headphone_rec.level
+#equalization_levels = speaker_rec.level - headphone_rec.level
 
 # step 2: frequency equalization
 """
@@ -210,29 +205,42 @@ for i in range(rec_repeat):
     rec = play_and_record_headphones(attenuated,equalize=False)
     temp_recs.append(rec.data)
 headphone_rec_tf = (slab.Sound(data=numpy.mean(temp_recs, axis=0)))
-#headphone_rec_tf = filt.apply(headphone_rec_tf)
-headphone_rec_tf.channel(0).waveform()
+
+headphone_rec_tf.channel(1).level
+headphone_rec_tf.channel(1).waveform()
 headphone_rec_tf.channel(1).spectrum()
-headphone_rec.channel(1).spectrum()
 speaker_rec_tf.channel(1).spectrum()
+
+reversed_headphone = headphone_rec_tf
+correct_headphone = headphone_rec_tf
+
+### compare after calibration
+speaker_rec_tf.channel(1).spectrum()
+reversed_headphone.channel(1).spectrum()
+correct_headphone.channel(1).spectrum()
 
 # todo check if filter bank reduces audible differences between speaker and headphones:have to sit down and watch myself
 
 # save equalization
 headphone_equalization = {'23': None,'47': None, '48': None}
-headphone_equalization['23'] = {"level": 5, "filter": speaker_filter_bank_r}     #equalization_levels[0]+5
-headphone_equalization['47'] = {"level": 5, "filter": headphone_filter_bank_l}       #equalization_levels[0]
-headphone_equalization['48'] = {"level": 5, "filter": headphone_filter_bank_r}           #equalization_levels[1]
+headphone_equalization['23'] = {"level": 0, "filter": speaker_filter_bank_r}     #equalization_levels[0]+5
+headphone_equalization['47'] = {"level": 0, "filter": headphone_filter_bank_l}       #equalization_levels[0] was l
+headphone_equalization['48'] = {"level": 0.5, "filter": headphone_filter_bank_r}           #equalization_levels[1]
 # the level equalization doesnt do anything since the filter took care of the loudness difference as well
 
 # write final equalization to pkl file
-calibration_path = freefield.DIR / 'data' / 'headphone_equalization_2911.pkl'
-# project_path = Path.cwd() / 'data' / 'calibration'
-# equalization_path = project_path / f'calibration_dome_100k_31.10.pkl'
+calibration_path = freefield.DIR / 'data' / 'headphone_equalization_1212.pkl'
+project_path = Path.cwd() / 'data' / 'calibration'
+#equalization_path = project_path / f'calibration_dome_100k_31.10.pkl'
 with open(calibration_path, 'wb') as f:  # save the newly recorded calibration
     pickle.dump(headphone_equalization, f, pickle.HIGHEST_PROTOCOL)
 
 # todo make sure that equalization works with the freefield package - check the load_equalization function in freefield.py
+
+### load equalization
+calibration_path = freefield.DIR / 'data' / 'headphone_equalization_1212.pkl'
+with open(calibration_path, 'rb') as f:  # read the saved calibration
+    headphone_equalization = pickle.load(f)
 
 table_file = freefield.DIR / 'data' / 'tables' / Path(f'speakertable_dome.txt')
 speaker_table = numpy.loadtxt(table_file, skiprows=1, usecols=(0, 3, 4,), delimiter=",", dtype=float)
@@ -244,21 +252,22 @@ speakers = freefield.pick_speakers(headphone_speaker_list)
 headphone_rec_full = []  # store all recordings from the dome for final spectral difference
 temp_recs = []
 freefield.PROCESSORS.mode = 'bi_play_rec'
-# record new filtered data through calibrated headphone
-for i in range(rec_repeat):
-    time.sleep(5)
-    rec = play_and_record_headphones(signal = signal,equalize=True)
+signal1 = slab.Binaural(signal)
+for i in range(20):
+    time.sleep(1)
+    rec = play_and_record_headphones(signal = signal1,equalize=True)
     temp_recs.append(rec.data)
 headphone_rec_full = (slab.Sound(data=numpy.mean(temp_recs, axis=0)))
 
 headphone_rec_full.channel(0).level
 headphone_rec_full.channel(1).level
 
+headphone_rec_full.channel(0).spectrum()
 headphone_rec_full.channel(1).spectrum()
 
+###### SPEAKER complete test after calibration 41.7db
 
-###### SPEAKER complete test after calibration
-#speakers = freefield.pick_speakers(reference_speaker)
+speakers = freefield.pick_speakers(reference_speaker)
 n_delay = freefield.get_recording_delay(play_from="RX8", rec_from="RP2")
 n_delay += 50  # make the delay a bit larger to avoid missing the sound's onset
 freefield.set_signal_and_speaker(speaker=reference_speaker, signal=signal, equalize=True)
@@ -268,7 +277,7 @@ freefield.write(tag='chan_r', value=99, processors='RP2')
 temp_recs = []
 speaker_rec = []
 for i in range(rec_repeat):
-    time.sleep(5)
+    time.sleep(1)
     freefield.play()
     rec_l = freefield.read(tag='datal', processor='RP2', n_samples=signal.n_samples + n_delay)[n_delay:]
     rec_r = freefield.read(tag='datar', processor='RP2', n_samples=signal.n_samples + n_delay)[n_delay:]
