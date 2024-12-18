@@ -1,0 +1,33 @@
+# Praat script to segment, rename, and save extracted sound intervals
+
+vp$ = "VP21"
+
+# Load the sound file
+Read from file: "C:/projects/AVH/stimuli/" + vp$ + "/" + vp$ + ".wav"
+pathout$ = "C:/projects/AVH/stimuli/" + vp$ + "/raw/" 
+createDirectory: pathout$
+# Define the list of names
+names$# = {"Bein", "Huhn", "Wurm", "Buch","Bahn", "Baum", "Heim","Lamm","Arm","Helm"}
+
+
+# Segment the sound into silent and sounding intervals
+select Sound 'vp$'
+To TextGrid (silences): 80, 0, -30, 0.2, 0.15, "silent", "sounding"
+
+#for manual
+#vp$ = "VP01"
+#names$# = {"Bein", "Huhn", "Wurm", "Buch","Bahn", "Baum", "Heim","Lamm","Arm","Helm"}
+
+# Extract the sounding intervals
+select Sound 'vp$'
+plus TextGrid 'vp$'
+Extract intervals where: 1, "no", "is equal to", "sounding"
+
+# Loop through the extracted sound objects, rename, and save them
+for i from 1 to 10
+    name$ = names$#[i]
+    selectObject: "Sound "+ vp$+ "_sounding_" + string$(i)
+    #Rename... name$
+    Save as WAV file: pathout$ + name$ + ".wav"
+    
+endfor

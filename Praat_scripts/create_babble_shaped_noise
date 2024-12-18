@@ -1,0 +1,8 @@
+To Intensity: 100, 0, "yes"
+Down to IntensityTier
+To AmplitudeTier
+selectObject: "Sound speech_shaped_noise"
+plusObject: "AmplitudeTier party-crowd-daniel_simon_mono"
+Multiply
+View & Edit
+Save as WAV file: "C:\phD\MPI\Experiments\1.Voice_Detection_and_Discrimination\Stimuli\speech_shaped_modulated_babble_extended.wav"

@@ -1,0 +1,71 @@
+vp$ = "VP10"
+lan$ = "EN"
+
+if lan$ == "EN"
+	directory$ = "C:/phD/MPI/2.Experiments/1.Voice_Detection_and_Discrimination/stimuli/EN/" + vp$ + "/raw/_Intensity75/"
+	pathout$ = "C:/phD/MPI/2.Experiments/1.Voice_Detection_and_Discrimination/stimuli/EN/" + vp$ + "/raw/_Intensity75/pitch_shifted/"
+	createDirectory: pathout$
+else
+	
+
+vp$ = "VP10"
+directory$ = "C:/phD/MPI/2.Experiments/1.Voice_Detection_and_Discrimination/stimuli/EN/" + vp$ + "/raw/_Intensity75/"
+pathout$ = "C:/phD/MPI/2.Experiments/1.Voice_Detection_and_Discrimination/stimuli/EN/" + vp$ + "/raw/_Intensity75/pitch_shifted/"
+#createDirectory: pathout$
+
+
+
+# Create a list of all WAV files in the directory
+Create Strings as file list: "File List", directory$ + "*.wav"
+file_list = selected("Strings")
+number_of_files = Get number of strings
+
+# Loop through the extracted sound objects, rename, and save them
+for i from 1 to number_of_files
+    select Strings File_List
+    fileName$ = Get string... i
+    name$ = fileName$ 
+    full_path$ = directory$ + name$
+    
+    # Read the sound file
+    Read from file: full_path$
+    name_without_extension$ = name$ - ".wav"
+    Save as WAV file: pathout$ + name_without_extension$ + ".wav"
+    
+       
+    # Pitch shift by -2 semitones
+    selectObject: "Sound " + name_without_extension$
+    To Manipulation: 0.01, 75, 600
+    Extract pitch tier
+    selectObject: "PitchTier " + name_without_extension$
+    totalDuration = Get total duration
+    Multiply frequencies: 0, totalDuration, 0.8909
+    plusObject: "Manipulation " + name_without_extension$
+    Replace pitch tier
+    selectObject: "Manipulation " + name_without_extension$
+    Get resynthesis (overlap-add)
+    Save as WAV file: pathout$ + name_without_extension$ + "_shift2st_down.wav"
+    selectObject: "Sound " + name_without_extension$
+    Remove
+
+    # Pitch shift by -4 semitones
+    Read from file: full_path$
+    To Manipulation: 0.01, 75, 600
+    Extract pitch tier
+    selectObject: "PitchTier " + name_without_extension$
+    totalDuration = Get total duration
+    Multiply frequencies: 0, totalDuration, 0.7937
+    plusObject: "Manipulation " + name_without_extension$
+    Replace pitch tier
+    selectObject: "Manipulation " + name_without_extension$
+    Get resynthesis (overlap-add)
+    Save as WAV file: pathout$ + name_without_extension$ + "_shift4st_down.wav"
+    selectObject: "Sound " + name_without_extension$
+    Remove
+
+    
+endfor
+
+# Clean up the file list
+selectObject: file_list
+Remove
